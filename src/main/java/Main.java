@@ -13,9 +13,35 @@ public class Main {
 
     public static void main(String[] args) throws InterruptedException {
         List<Thread> threads = new ArrayList<>();
+        Thread show_leader = new Thread(() -> {
+            synchronized (sizeToFreq) {
+                int maxCount = Integer.MIN_VALUE;
+                int maxKey = 0;
+                int preMaxKey = 0;
+                while (!Thread.interrupted()) {
+                    try {
+                        sizeToFreq.wait();
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                    for (int key : sizeToFreq.keySet()) {
+                        if (sizeToFreq.get(key) > maxCount) {
+                            maxCount = sizeToFreq.get(key);
+                            preMaxKey = maxKey;
+                            maxKey = key;
+                        }
+                    }
+                    if (preMaxKey != maxKey) {
+                        preMaxKey = maxKey;
+                        System.out.println("Промежуточное самое частое количество повторений " + maxKey
+                                + " (встретилось " + sizeToFreq.get(maxKey) + " раз)");
+                    }
+                }
+            }
+        });
+        show_leader.start();
         for (int i = 0; i < 1000; i++) {
             String route = generateRoute("RLRFR", 100);
-
             Runnable algo = () -> {
                 int count = 0;
                 for (int j = 0; j < route.length(); j++) {
@@ -23,6 +49,7 @@ public class Main {
                 }
                 synchronized (sizeToFreq) {
                     sizeToFreq.put(count, sizeToFreq.getOrDefault(count, 0) + 1);
+                    sizeToFreq.notify();
                 }
             };
             Thread thread = new Thread(algo);
@@ -32,18 +59,22 @@ public class Main {
         for (Thread thread : threads) {
             thread.join();
         }
+        show_leader.interrupt();
         int maxCount = Integer.MIN_VALUE;
         int maxKey = 0;
-        for (int key : sizeToFreq.keySet())  {
-            if (sizeToFreq.get(key) > maxCount) {
-                maxCount = sizeToFreq.get(key);
-                maxKey = key;
+        synchronized (sizeToFreq) {
+            for (int key : sizeToFreq.keySet()) {
+                if (sizeToFreq.get(key) > maxCount) {
+                    maxCount = sizeToFreq.get(key);
+                    maxKey = key;
+                }
             }
+            System.out.println("**********************************************");
+            System.out.println("Самое частое количество повторений " + maxKey
+                    + " (встретилось " + sizeToFreq.get(maxKey) + " раз)");
+            sizeToFreq.remove(maxKey);
+            System.out.println("Другие размеры:");
+            sizeToFreq.forEach((key, value) -> System.out.println("- " + key + " (" + value + " раз)"));
         }
-        System.out.println("Самое частое количество повторений " + maxKey
-                + " (встретилось " + sizeToFreq.get(maxKey) + " раз)");
-        sizeToFreq.remove(maxKey);
-        System.out.println("Другие размеры:");
-        sizeToFreq.forEach((key, value) -> System.out.println("- " + key + " (" + value + " раз)"));
     }
 }
